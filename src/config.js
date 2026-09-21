@@ -1,5 +1,6 @@
 // ChatIQ API Configuration
-export const API_BASE = 'http://161.118.169.58:3000';
+export const API_BASE = 'https://routeiq.duckdns.org';
+
 
 export const DEFAULT_BOT_COLORS = [
   { name: 'Indigo', hex: '#4f46e5', label: 'Indigo' },

@@ -11,6 +11,7 @@ import CodeBlock from '../components/CodeBlock';
 import ChatWidgetPreview from '../components/ChatWidgetPreview';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { getBot } from '../api';
+import { API_BASE } from '../config';
 
 export default function EmbedSuccess() {
   const { botId } = useParams();
@@ -37,7 +38,7 @@ export default function EmbedSuccess() {
   }, [botId]);
 
   // Exact script tag requirement
-  const scriptTagCode = `<script src="http://161.118.169.58:3000/widget/widget.js" data-bot-id="${botId}" async></script>`;
+  const scriptTagCode = `<script src="${API_BASE}/widget/widget.js" data-bot-id="${botId}" async></script>`;
 
   const platformGuides = {
     wordpress: {
