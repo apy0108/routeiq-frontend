@@ -129,60 +129,72 @@ export default function CreateWizard() {
   };
 
   // STEP 2: START URL TRAINING & POLL STATUS
-  const startPolling = (targetBotId) => {
-    if (!targetBotId) {
-      setStep2Error('Bot creation failed, please go back to Step 1');
-      setTrainingStatus('failed');
-      setTrainingStatusText('Bot creation failed, please go back to Step 1');
-      return;
-    }
+const startPolling = (targetBotId) => {
+  if (!targetBotId) {
+    setStep2Error('Bot creation failed, please go back to Step 1');
+    setTrainingStatus('failed');
+    setTrainingStatusText('Bot creation failed, please go back to Step 1');
+    return;
+  }
 
+  if (pollIntervalRef.current) {
+    clearInterval(pollIntervalRef.current);
+    pollIntervalRef.current = null;
+  }
+
+  let consecutiveErrors = 0;
+
+  const fetchStatus = async () => {
+    try {
+      const response = await getTrainingStatus(targetBotId);
+      consecutiveErrors = 0; // reset on success
+      
+      if (response && response.status === 'ready') {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+        setTrainingStatus('ready');
+        const count = response.chunkCount ?? 0;
+        setChunksFound(count);
+        setTrainingStatusText(`Done! Found ${count} chunks`);
+      } else if (response && (response.status === 'failed' || response.status === 'error')) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+        setTrainingStatus('failed');
+        const errorMsg = response.errorMessage || response.error || 'Training failed.';
+        setTrainingStatusText(errorMsg);
+        setStep2Error(errorMsg);
+      } else {
+        // Still training or pending — keep polling
+        setTrainingStatus('training');
+        setTrainingStatusText('Scanning website...');
+      }
+    } catch (pollErr) {
+      consecutiveErrors++;
+      console.error(`Poll error #${consecutiveErrors}:`, pollErr.message);
+      if (consecutiveErrors >= 4) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+        setTrainingStatus('failed');
+        setTrainingStatusText('Cannot connect to server. Check your connection.');
+        setStep2Error(`Connection failed: ${pollErr.message}. Make sure the backend is running.`);
+      }
+    }
+  };
+
+  fetchStatus(); // run immediately
+  pollIntervalRef.current = setInterval(fetchStatus, 3000);
+
+  // Safety timeout after 5 minutes
+  setTimeout(() => {
     if (pollIntervalRef.current) {
       clearInterval(pollIntervalRef.current);
       pollIntervalRef.current = null;
+      setTrainingStatus('failed');
+      setTrainingStatusText('Timed out after 5 minutes.');
+      setStep2Error('Training timed out. Try again with fewer pages.');
     }
-
-    const fetchStatus = async () => {
-      try {
-        const response = await getTrainingStatus(targetBotId);
-        
-        // Expected response: { "success": true, "status": "ready", "chunkCount": 145, "errorMessage": null }
-        if (response && response.status === 'ready') {
-          if (pollIntervalRef.current) {
-            clearInterval(pollIntervalRef.current);
-            pollIntervalRef.current = null;
-          }
-          setTrainingStatus('ready');
-          const count = response.chunkCount ?? 0;
-          setChunksFound(count);
-          setTrainingStatusText(`Done! Found ${count} chunks`);
-        } else if (response && response.status === 'failed') {
-          if (pollIntervalRef.current) {
-            clearInterval(pollIntervalRef.current);
-            pollIntervalRef.current = null;
-          }
-          setTrainingStatus('failed');
-          const errorMsg = response.errorMessage || response.error || response.message || 'Training failed.';
-          setTrainingStatusText(errorMsg);
-          setStep2Error(errorMsg);
-        } else if (response && (response.status === 'training' || response.status === 'pending')) {
-          setTrainingStatus('training');
-          setTrainingStatusText('Scanning website...');
-        } else {
-          setTrainingStatus('training');
-          setTrainingStatusText('Scanning website...');
-        }
-      } catch (pollErr) {
-        console.warn('Status poll error:', pollErr);
-      }
-    };
-
-    // Run first check immediately
-    fetchStatus();
-
-    // Poll every 3 seconds
-    pollIntervalRef.current = setInterval(fetchStatus, 3000);
-  };
+  }, 300000);
+};
 
   const handleStartUrlScan = async (e) => {
     e?.preventDefault();
@@ -296,21 +308,20 @@ export default function CreateWizard() {
       <Navbar showCreateButton={false} />
 
       <main className="flex-1 max-w-4xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        
+
         {/* Progress Tracker */}
         <div className="mb-10">
           <div className="flex items-center justify-between border-b border-gray-200 pb-4">
-            
+
             {/* Step 1 */}
             <div className="flex items-center gap-2">
               <div
-                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold ${
-                  currentStep === 1
+                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold ${currentStep === 1
                     ? 'bg-indigo-600 text-white'
                     : currentStep > 1
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-gray-100 text-gray-400'
-                }`}
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-gray-100 text-gray-400'
+                  }`}
               >
                 {currentStep > 1 ? <Check className="w-3.5 h-3.5" /> : '1'}
               </div>
@@ -324,13 +335,12 @@ export default function CreateWizard() {
             {/* Step 2 */}
             <div className="flex items-center gap-2">
               <div
-                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold ${
-                  currentStep === 2
+                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold ${currentStep === 2
                     ? 'bg-indigo-600 text-white'
                     : currentStep > 2
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-gray-100 text-gray-400'
-                }`}
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-gray-100 text-gray-400'
+                  }`}
               >
                 {currentStep > 2 ? <Check className="w-3.5 h-3.5" /> : '2'}
               </div>
@@ -344,11 +354,10 @@ export default function CreateWizard() {
             {/* Step 3 */}
             <div className="flex items-center gap-2">
               <div
-                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold ${
-                  currentStep === 3
+                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold ${currentStep === 3
                     ? 'bg-indigo-600 text-white'
                     : 'bg-gray-100 text-gray-400'
-                }`}
+                  }`}
               >
                 3
               </div>
@@ -377,7 +386,7 @@ export default function CreateWizard() {
             )}
 
             <form onSubmit={handleCreateBotStep1} className="space-y-6 bg-white border border-gray-200 rounded-xl p-6 sm:p-8 shadow-sm">
-              
+
               {/* Bot Name */}
               <div className="space-y-1.5">
                 <label className="block text-sm font-semibold text-gray-900">
@@ -405,11 +414,10 @@ export default function CreateWizard() {
                         type="button"
                         key={type.id}
                         onClick={() => handleBusinessTypeSelect(type)}
-                        className={`p-3.5 rounded-lg text-left border transition-colors ${
-                          isSelected
+                        className={`p-3.5 rounded-lg text-left border transition-colors ${isSelected
                             ? 'border-indigo-600 bg-indigo-50/40 ring-1 ring-indigo-600'
                             : 'border-gray-200 bg-white hover:bg-gray-50'
-                        }`}
+                          }`}
                       >
                         <div className="text-sm font-semibold text-gray-900">
                           {type.title}
@@ -492,7 +500,7 @@ export default function CreateWizard() {
             )}
 
             <div className="space-y-4">
-              
+
               {/* Section A: Website URL */}
               <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm space-y-4">
                 <div className="flex items-center gap-2 text-gray-900 font-semibold text-sm">
@@ -677,10 +685,10 @@ export default function CreateWizard() {
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
-              
+
               {/* Controls */}
               <div className="md:col-span-6 space-y-6 bg-white border border-gray-200 rounded-xl p-6 sm:p-8 shadow-sm">
-                
+
                 {/* Color presets */}
                 <div className="space-y-2">
                   <label className="block text-sm font-semibold text-gray-900">
@@ -695,9 +703,8 @@ export default function CreateWizard() {
                           key={c.hex}
                           onClick={() => setPrimaryColor(c.hex)}
                           title={c.name}
-                          className={`w-full aspect-square rounded-lg flex items-center justify-center transition-all ${
-                            isSelected ? 'ring-2 ring-offset-2 ring-gray-900' : 'opacity-85 hover:opacity-100'
-                          }`}
+                          className={`w-full aspect-square rounded-lg flex items-center justify-center transition-all ${isSelected ? 'ring-2 ring-offset-2 ring-gray-900' : 'opacity-85 hover:opacity-100'
+                            }`}
                           style={{ backgroundColor: c.hex }}
                         >
                           {isSelected && <Check className="w-4 h-4 text-white" />}
@@ -716,11 +723,10 @@ export default function CreateWizard() {
                     <button
                       type="button"
                       onClick={() => setPosition('bottom-right')}
-                      className={`p-3.5 rounded-lg border text-left text-sm font-medium transition-colors ${
-                        position === 'bottom-right'
+                      className={`p-3.5 rounded-lg border text-left text-sm font-medium transition-colors ${position === 'bottom-right'
                           ? 'border-indigo-600 bg-indigo-50/40 text-indigo-900 ring-1 ring-indigo-600'
                           : 'border-gray-200 text-gray-700 hover:bg-gray-50'
-                      }`}
+                        }`}
                     >
                       Bottom Right
                     </button>
@@ -728,11 +734,10 @@ export default function CreateWizard() {
                     <button
                       type="button"
                       onClick={() => setPosition('bottom-left')}
-                      className={`p-3.5 rounded-lg border text-left text-sm font-medium transition-colors ${
-                        position === 'bottom-left'
+                      className={`p-3.5 rounded-lg border text-left text-sm font-medium transition-colors ${position === 'bottom-left'
                           ? 'border-indigo-600 bg-indigo-50/40 text-indigo-900 ring-1 ring-indigo-600'
                           : 'border-gray-200 text-gray-700 hover:bg-gray-50'
-                      }`}
+                        }`}
                     >
                       Bottom Left
                     </button>
